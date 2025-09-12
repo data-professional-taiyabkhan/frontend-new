@@ -25,19 +25,14 @@ export const VOICE_CONFIG = {
   // Wake Phrases Configuration
   WAKE_PHRASES: {
     // Primary wake phrase
-    PRIMARY: 'hey mummyhelp',
+    PRIMARY: 'mummy help',
     
-    // Alternative wake phrases
+    // Alternative wake phrases - only mummy help variations
     ALTERNATIVES: [
-      'hey mummy help',
       'mummy help',
       'mummyhelp',
-      'help me',
-      'emergency',
-      'sos',
-      'help',
-      'danger',
-      'panic'
+      'mummy help me',
+      'mummy help please'
     ],
     
     // Confidence threshold for wake phrase detection

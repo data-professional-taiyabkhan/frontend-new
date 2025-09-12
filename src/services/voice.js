@@ -1,4 +1,5 @@
 import * as Speech from 'expo-speech';
+// TODO: Migrate to expo-audio when upgrading to SDK 54+ (expo-av is deprecated)
 import { Audio } from 'expo-av';
 import { Alert, Platform } from 'react-native';
 
@@ -50,24 +51,22 @@ class VoiceService {
   // Initialize audio permissions
   async initializeAudio() {
     try {
+      console.log('Initializing voice service...');
+      
+      // Request audio recording permissions
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Audio permission is required for voice-activated alerts.',
-          [{ text: 'OK' }]
-        );
+        console.error('Audio permissions not granted');
         return false;
       }
-
+      
+      // Set audio mode for recording
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
       });
-
+      
+      console.log('Voice service initialized successfully');
       return true;
     } catch (error) {
       console.error('Error initializing audio:', error);

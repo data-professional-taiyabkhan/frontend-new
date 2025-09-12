@@ -9,7 +9,6 @@
     "newArchEnabled": true,
     "owner": "mohdtaiyabkhan239",
     "description": "Voice-activated emergency alert app for children and parents",
-    "privacy": "public",
     "platforms": [
       "ios",
       "android"
@@ -23,22 +22,22 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow MummyHelp to access your microphone for voice-activated emergency alerts.",
-          "backgroundAudio": true
+          "microphonePermission": "Allow MummyHelp to access your microphone for voice-activated emergency alerts."
         }
       ],
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow MummyHelp to access your location for emergency alerts.",
-          "locationAlwaysPermission": "Allow MummyHelp to access your location in the background for emergency alerts."
+          "locationAlwaysPermission": "Allow MummyHelp to access your location in the background for continuous tracking during emergencies."
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ffffff"
+          "color": "#FF6B6B",
+          "sounds": ["./assets/notification-sound.wav"]
         }
       ]
     ],
@@ -46,18 +45,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.mummyhelp.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "MummyHelp needs microphone access for voice commands and emergency alerts.",
-        "NSLocationWhenInUseUsageDescription": "MummyHelp needs location access to send your location with emergency alerts.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "MummyHelp needs location access to send your location with emergency alerts.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "MummyHelp needs access to your location to send emergency alerts and track your safety.",
+        "NSLocationAlwaysUsageDescription": "MummyHelp needs background location access to continuously track your location during emergencies.",
         "UIBackgroundModes": [
-          "audio",
-          "location",
-          "background-processing",
-          "audio",
           "location",
           "background-processing"
-        ],
-        "NSSpeechRecognitionUsageDescription": "MummyHelp uses speech recognition for voice-activated emergency alerts."
+        ]
       }
     },
     "android": {
@@ -72,28 +65,15 @@
         "RECORD_AUDIO",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "WAKE_LOCK",
+        "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "RECORD_AUDIO",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "WAKE_LOCK",
-        "FOREGROUND_SERVICE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "scheme": "mummyhelp",
     "extra": {
       "eas": {
         "projectId": "2571c036-b08a-4511-afa9-c8057724617e"

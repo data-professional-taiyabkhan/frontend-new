@@ -62,6 +62,7 @@ class LocationService {
         timestamp: location.timestamp,
         speed: location.coords.speed,
         heading: location.coords.heading,
+        altitude: location.coords.altitude,
       };
 
       return this.currentLocation;
@@ -89,7 +90,7 @@ class LocationService {
           timeInterval: 10000, // Update every 10 seconds
           distanceInterval: 10, // Update when moved 10 meters
         },
-        (location) => {
+        async (location) => {
           this.currentLocation = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -97,8 +98,12 @@ class LocationService {
             timestamp: location.timestamp,
             speed: location.coords.speed,
             heading: location.coords.heading,
+            altitude: location.coords.altitude,
           };
 
+          // Note: Backend sending is handled by the calling component (ChildDashboard)
+          // to avoid duplicate calls and user ID issues
+          
           if (callback) {
             callback(this.currentLocation);
           }
@@ -209,6 +214,92 @@ class LocationService {
       currentLocation: this.currentLocation,
       hasPermission: this.checkLocationPermissions(),
     };
+  }
+
+  // Send location to backend
+  async sendLocationToBackend(location) {
+    try {
+      // Import API dynamically to avoid circular imports
+      const { locationAPI } = await import('./api');
+      
+      // Get current user ID from storage
+      const { storage } = await import('./api');
+      const userData = await storage.getUser();
+      
+      if (!userData || !userData.id) {
+        console.error('No user ID available for location tracking');
+        return false;
+      }
+      
+      // Validate required fields first
+      if (!location.latitude || !location.longitude || isNaN(location.latitude) || isNaN(location.longitude)) {
+        console.error('Invalid location data - missing or invalid lat/lng:', location);
+        return false;
+      }
+
+      // Validate latitude and longitude ranges
+      const lat = parseFloat(location.latitude);
+      const lng = parseFloat(location.longitude);
+      
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        console.error('Location coordinates out of valid range:', { lat, lng });
+        return false;
+      }
+
+      // Clean and validate location data before sending
+      const cleanLocationData = {
+        latitude: Math.round(lat * 1000000) / 1000000, // Round to 6 decimal places
+        longitude: Math.round(lng * 1000000) / 1000000, // Round to 6 decimal places
+      };
+
+      // Only add optional fields if they have valid values
+      if (location.accuracy && !isNaN(location.accuracy) && location.accuracy > 0) {
+        cleanLocationData.accuracy = Math.round(parseFloat(location.accuracy) * 100) / 100; // Round to 2 decimal places
+      }
+      
+      // Heading: -1 means invalid, only send if it's a valid bearing (0-360)
+      if (location.heading && !isNaN(location.heading) && location.heading >= 0 && location.heading <= 360) {
+        cleanLocationData.heading = Math.round(parseFloat(location.heading) * 10) / 10; // Round to 1 decimal place
+      }
+      
+      // Speed: -1 or negative means invalid, only send if it's positive
+      if (location.speed && !isNaN(location.speed) && location.speed >= 0) {
+        cleanLocationData.speed = Math.round(parseFloat(location.speed) * 100) / 100; // Round to 2 decimal places
+      }
+      
+      // Altitude: Only add if it's a valid number
+      if (location.altitude && !isNaN(location.altitude)) {
+        cleanLocationData.altitude = Math.round(parseFloat(location.altitude) * 10) / 10; // Round to 1 decimal place
+      }
+
+      // Note: Don't send timestamp as it's not expected by the backend validation
+      // The backend will set its own timestamp when creating the location record
+
+      // Log the cleaned data for debugging
+      console.log('Sending cleaned location data:', cleanLocationData);
+
+      const response = await locationAPI.create(cleanLocationData);
+      
+      if (response.success) {
+        console.log('Location sent to backend successfully');
+        return true;
+      } else {
+        console.log('Failed to send location to backend:', response.message);
+        if (response.errors) {
+          console.log('Validation errors:', JSON.stringify(response.errors, null, 2));
+        }
+        return false;
+      }
+    } catch (error) {
+      console.error('Error sending location to backend:', error);
+      if (error.response?.data?.errors) {
+        console.log('Backend validation errors:', JSON.stringify(error.response.data.errors, null, 2));
+      }
+      if (error.response?.data) {
+        console.log('Full error response:', JSON.stringify(error.response.data, null, 2));
+      }
+      return false;
+    }
   }
 
   // Get the current location object

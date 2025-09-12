@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { deviceTokenAPI } from './api';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -23,9 +24,20 @@ class NotificationService {
     let token;
 
     if (Platform.OS === 'android') {
+      // Create emergency channel for urgent notifications
+      await Notifications.setNotificationChannelAsync('emergency', {
+        name: 'emergency',
+        importance: Notifications.AndroidImportance.MAX,
+        bypassDnd: true,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+      
+      // Create default channel for regular notifications
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
+        importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF231F7C',
       });
@@ -71,6 +83,30 @@ class NotificationService {
     return this.expoPushToken;
   }
 
+  // Register push token with backend
+  async registerTokenWithBackend() {
+    if (!this.expoPushToken) {
+      console.log('No push token available to register');
+      return false;
+    }
+
+    try {
+      const platform = Platform.OS;
+      const result = await deviceTokenAPI.register(platform, this.expoPushToken);
+      
+      if (result.success) {
+        console.log('Push token registered with backend successfully');
+        return true;
+      } else {
+        console.error('Failed to register push token with backend:', result.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error registering push token with backend:', error);
+      return false;
+    }
+  }
+
   // Send local notification
   async sendLocalNotification(title, body, data = {}) {
     try {
@@ -91,16 +127,27 @@ class NotificationService {
 
   // Send emergency alert notification
   async sendEmergencyAlert(childName, location = 'Unknown location') {
-    await this.sendLocalNotification(
-      '🚨 Emergency Alert!',
-      `${childName} needs immediate help at ${location}`,
-      {
-        type: 'emergency',
-        childName,
-        location,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🚨 Emergency Alert!',
+          body: `${childName} needs immediate help at ${location}`,
+          data: {
+            type: 'emergency',
+            childName,
+            location,
+            timestamp: new Date().toISOString(),
+          },
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          // Use emergency channel for Android
+          ...(Platform.OS === 'android' && { channelId: 'emergency' }),
+        },
+        trigger: null, // Send immediately
+      });
+    } catch (error) {
+      console.error('Error sending emergency notification:', error);
+    }
   }
 
   // Send check-in notification
