@@ -190,7 +190,9 @@ class NotificationService {
 
   // Remove notification listener
   removeNotificationListener(listener) {
-    return Notifications.removeNotificationSubscription(listener);
+    if (listener && typeof listener.remove === 'function') {
+      listener.remove();
+    }
   }
 
   // Get notification permissions status

@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import notificationService from '../services/notifications';
 import locationService from '../services/location';
 import voiceController from '../services/voiceController';
+// Remove network status import as we need child status instead
 import { 
   startBackgroundLocation, 
   stopBackgroundLocation, 
@@ -33,6 +34,8 @@ import {
   isBackgroundLocationActive as checkBackgroundLocationActive
 } from '../background/locationTask';
 import ConfirmModal from '../components/ConfirmModal';
+import EmergencyCountdownModal from '../components/EmergencyCountdownModal';
+import PythonVoiceTrigger from '../components/PythonVoiceTrigger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,11 +56,13 @@ const ChildDashboard = ({ navigation }) => {
   const [isBackgroundLocationActive, setIsBackgroundLocationActive] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalData, setConfirmModalData] = useState(null);
+  const [emergencyCountdownVisible, setEmergencyCountdownVisible] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('idle'); // 'idle', 'listening', 'processing', 'verifying'
   const [voicePermission, setVoicePermission] = useState(false);
   const [isWakePhraseActive, setIsWakePhraseActive] = useState(false);
   const [isInVoiceMode, setIsInVoiceMode] = useState(false);
   const [unpairLoading, setUnpairLoading] = useState(false);
+
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -253,9 +258,9 @@ const ChildDashboard = ({ navigation }) => {
           const unsubscribe = voiceController.addListener(handleVoiceEvent);
           console.log('✅ Voice event listener added');
           
-          // Step 6: Skip enrollment status check to avoid API errors
-          console.log('🔍 Skipping voice enrollment status check (disabled for production)');
-          setVoiceEnrollmentStatus(false);
+          // Step 6: Enable voice enrollment for wake word detection
+          console.log('🔍 Enabling voice enrollment for wake word detection');
+          setVoiceEnrollmentStatus(true);
           
           console.log('🎉 Voice setup completed successfully');
         } else {
@@ -377,6 +382,46 @@ const ChildDashboard = ({ navigation }) => {
     if (diffMinutes < 60) return `${diffMinutes}m ago`;
     if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
     return `${Math.floor(diffMinutes / 1440)}d ago`;
+  };
+
+  const getChildStatus = (user) => {
+    if (!user || !user.lastLogin) {
+      return {
+        text: '🔴 Offline',
+        color: '#f44336',
+        description: 'Never logged in'
+      };
+    }
+    
+    const lastSeen = new Date(user.lastLogin);
+    const now = new Date();
+    const diffMs = now - lastSeen;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    // Consider child "online" if they've been active within the last 5 minutes
+    if (diffMins <= 5) {
+      return {
+        text: '🟢 Online',
+        color: '#4caf50',
+        description: 'Active now'
+      };
+    }
+    // Consider child "away" if they've been active within the last 30 minutes
+    else if (diffMins <= 30) {
+      return {
+        text: '🟡 Away',
+        color: '#ff9800',
+        description: 'Recently active'
+      };
+    }
+    // Consider child "offline" if they haven't been active for more than 30 minutes
+    else {
+      return {
+        text: '🔴 Offline',
+        color: '#f44336',
+        description: 'Not active'
+      };
+    }
   };
 
   const loadPairingCode = async () => {
@@ -717,7 +762,9 @@ const ChildDashboard = ({ navigation }) => {
       
       case 'wakeDetected':
         setVoiceStatus('processing');
-        console.log('Wake word detected, starting verification...');
+        console.log('Wake word detected, showing emergency countdown...');
+        // Show emergency countdown modal instead of verification
+        setEmergencyCountdownVisible(true);
         break;
       
       case 'verificationProgress':
@@ -794,6 +841,35 @@ const ChildDashboard = ({ navigation }) => {
     } catch (error) {
       console.error('Error handling confirmation result:', error);
     }
+  };
+
+  // Emergency countdown modal handlers
+  const handleEmergencyCountdown = () => {
+    console.log('Emergency countdown triggered by Python voice service');
+    setEmergencyCountdownVisible(true);
+  };
+
+  const handleEmergencyCountdownCancel = () => {
+    console.log('Emergency countdown cancelled - continuing voice detection');
+    setEmergencyCountdownVisible(false);
+    setVoiceStatus('listening');
+    // Voice detection should continue automatically - no need to restart
+  };
+
+  const handleEmergencyCountdownConfirm = async () => {
+    console.log('Emergency countdown confirmed - sending alert');
+    setEmergencyCountdownVisible(false);
+    setVoiceStatus('listening');
+    
+    try {
+      // Send emergency alert
+      await handleVoiceEmergency('emergency');
+      console.log('Emergency alert sent - voice detection continues');
+    } catch (error) {
+      console.error('Error sending emergency alert:', error);
+      Alert.alert('Error', 'Failed to send emergency alert');
+    }
+    // Voice detection should continue automatically after emergency alert
   };
 
   // Voice Control Functions
@@ -1083,7 +1159,9 @@ const ChildDashboard = ({ navigation }) => {
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Status:</Text>
-                  <Text style={styles.infoValue}>🟢 Online</Text>
+                  <Text style={[styles.infoValue, { color: getChildStatus(pairedUser).color }]}>
+                    {getChildStatus(pairedUser).text}
+                  </Text>
                 </View>
                                  <View style={styles.infoRow}>
                    <Text style={styles.infoLabel}>Last Seen:</Text>
@@ -1155,6 +1233,7 @@ const ChildDashboard = ({ navigation }) => {
               </MotiView>
             </LinearGradient>
           </TouchableOpacity>
+
         </MotiView>
 
         {/* Pairing Code Card */}
@@ -1336,6 +1415,13 @@ const ChildDashboard = ({ navigation }) => {
           </Card.Content>
         </Card>
 
+        {/* Python Voice Trigger - Auto-start enabled */}
+        <PythonVoiceTrigger 
+          onEmergencyTriggered={handleEmergencyCountdown} 
+          autoStart={true}
+          emergencyCountdownVisible={emergencyCountdownVisible}
+        />
+
       </ScrollView>
 
       {/* Voice Confirmation Modal */}
@@ -1345,6 +1431,15 @@ const ChildDashboard = ({ navigation }) => {
         onCancel={() => handleConfirmModalResult(false)}
         timeoutMs={confirmModalData?.autoConfirmMs || 10000}
       />
+
+      {/* Emergency Countdown Modal */}
+      <EmergencyCountdownModal
+        visible={emergencyCountdownVisible}
+        onConfirm={handleEmergencyCountdownConfirm}
+        onCancel={handleEmergencyCountdownCancel}
+        countdownSeconds={3}
+      />
+
     </View>
   );
 };

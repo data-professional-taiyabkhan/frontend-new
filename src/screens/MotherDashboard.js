@@ -27,6 +27,7 @@ import { authAPI, userAPI, alertAPI } from '../services/api';
 import notificationService from '../services/notifications';
 import { useAuth } from '../context/AuthContext';
 import locationService from '../services/location';
+// Remove network status import as we need child status instead
 
 const { width, height } = Dimensions.get('window');
 
@@ -498,7 +499,7 @@ const MotherDashboard = ({ navigation }) => {
   const getSimpleAddress = async (latitude, longitude) => {
     try {
       // Use the same reverse geocoding as check-in functionality
-      const { Location } = require('expo-location');
+      const Location = require('expo-location');
       const reverseGeocode = await Location.reverseGeocodeAsync({
         latitude,
         longitude,
@@ -551,6 +552,46 @@ const MotherDashboard = ({ navigation }) => {
     if (diffMinutes < 60) return `${diffMinutes}m ago`;
     if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
     return `${Math.floor(diffMinutes / 1440)}d ago`;
+  };
+
+  const getChildStatus = (user) => {
+    if (!user || !user.lastLogin) {
+      return {
+        text: '🔴 Offline',
+        color: '#f44336',
+        description: 'Never logged in'
+      };
+    }
+    
+    const lastSeen = new Date(user.lastLogin);
+    const now = new Date();
+    const diffMs = now - lastSeen;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    // Consider child "online" if they've been active within the last 5 minutes
+    if (diffMins <= 5) {
+      return {
+        text: '🟢 Online',
+        color: '#4caf50',
+        description: 'Active now'
+      };
+    }
+    // Consider child "away" if they've been active within the last 30 minutes
+    else if (diffMins <= 30) {
+      return {
+        text: '🟡 Away',
+        color: '#ff9800',
+        description: 'Recently active'
+      };
+    }
+    // Consider child "offline" if they haven't been active for more than 30 minutes
+    else {
+      return {
+        text: '🔴 Offline',
+        color: '#f44336',
+        description: 'Not active'
+      };
+    }
   };
 
   if (loading) {
@@ -785,7 +826,9 @@ const MotherDashboard = ({ navigation }) => {
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Status:</Text>
-                    <Text style={styles.infoValue}>🟢 Online</Text>
+                    <Text style={[styles.infoValue, { color: getChildStatus(pairedUser).color }]}>
+                      {getChildStatus(pairedUser).text}
+                    </Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Last Seen:</Text>

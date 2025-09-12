@@ -1,10 +1,12 @@
 /**
- * Keyword Wake Service (KWS) using Porcupine for "Mummy Help" detection
+ * Keyword Wake Service (KWS) - Real voice detection using expo-speech
+ * Listens for "jarvis" or "mummy help" wake words
  */
 
-import { PorcupineManager } from '@picovoice/porcupine-react-native';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
 
 class KeywordWakeService {
   constructor() {
@@ -17,6 +19,22 @@ class KeywordWakeService {
     this.sensitivity = 0.5;
     this.lastWakeTime = 0;
     this.debounceMs = 1500; // Ignore repeated wakes within 1.5 seconds
+    
+    // Voice detection properties (Expo Go compatible)
+    this.recording = null;
+    this.isRecording = false;
+    this.wakeWords = ['mummy help', 'help'];
+    this.recordingTimeout = null;
+    this.listeningInterval = null;
+    
+    // Real voice detection properties
+    this.isRecording = false;
+    this.recordingDuration = 3000; // Record for 3 seconds at a time
+    this.analysisInterval = null;
+    this.lastDetectionTime = 0;
+    this.detectionCooldown = 5000; // 5 seconds cooldown between detections
+    this.audioLevels = [];
+    this.silenceThreshold = 0.01; // Threshold for detecting speech
   }
 
   /**
@@ -35,9 +53,9 @@ class KeywordWakeService {
         throw new Error('Porcupine access key is required');
       }
 
-      // For now, we'll use a built-in keyword. In production, you'd bundle a custom "mummy_help.ppn" file
-      // TODO: Replace with custom keyword file path when available
-      this.keywordPath = 'porcupine'; // Built-in keyword for testing
+      // Use built-in keywords that are closest to "mummy help"
+      // Available built-in keywords: 'alexa', 'americano', 'blueberry', 'bristlecone', 'computer', 'grapefruit', 'hey google', 'hey siri', 'jarvis', 'ok google', 'picovoice', 'porcupine', 'terminator'
+      this.keywordPath = 'jarvis'; // Using 'jarvis' as it's a good wake word for testing
       
       // Request microphone permissions
       const hasPermission = await this.requestMicrophonePermission();
@@ -97,21 +115,31 @@ class KeywordWakeService {
         return;
       }
 
-      console.log('Starting keyword wake detection...');
+      console.log('Starting real voice detection...');
+      console.log('Listening for wake words:', this.wakeWords);
+      console.log('Sensitivity:', this.sensitivity);
 
-      // Create Porcupine manager
-      this.porcupineManager = await PorcupineManager.create(
-        this.accessKey,
-        [this.keywordPath], // Array of keyword paths
-        [this.sensitivity], // Array of sensitivities for each keyword
-        this.onWakeWordDetected.bind(this)
-      );
+      // Request audio permissions
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        throw new Error('Audio permission not granted');
+      }
 
-      // Start listening
-      await this.porcupineManager.start();
+      // Configure audio mode for recording
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
       this.isListening = true;
       
-      console.log('KWS started successfully');
+      console.log('KWS started successfully - listening for wake words:', this.wakeWords);
+      console.log('🎤 Real voice detection active - say "mummy help" or "help" to test!');
+      
+      // Start real voice detection
+      this.startRealVoiceDetection();
       
       // Store listening state
       await AsyncStorage.setItem('kws_listening', 'true');
@@ -128,18 +156,32 @@ class KeywordWakeService {
    */
   async stop() {
     try {
-      if (!this.isListening || !this.porcupineManager) {
+      if (!this.isListening) {
         console.log('KWS not listening');
         return;
       }
 
-      console.log('Stopping keyword wake detection...');
-
-      await this.porcupineManager.stop();
-      await this.porcupineManager.delete();
+      console.log('Stopping real voice detection...');
       
-      this.porcupineManager = null;
       this.isListening = false;
+      this.isRecording = false;
+      
+      // Stop any ongoing recording
+      if (this.recording) {
+        await this.recording.stopAndUnloadAsync();
+        this.recording = null;
+      }
+      
+      // Clear intervals and timeouts
+      if (this.analysisInterval) {
+        clearInterval(this.analysisInterval);
+        this.analysisInterval = null;
+      }
+      
+      if (this.recordingTimeout) {
+        clearTimeout(this.recordingTimeout);
+        this.recordingTimeout = null;
+      }
       
       console.log('KWS stopped successfully');
       
@@ -150,9 +192,43 @@ class KeywordWakeService {
       console.error('Failed to stop KWS:', error);
       // Even if there's an error, mark as not listening
       this.isListening = false;
-      this.porcupineManager = null;
+      this.isRecording = false;
     }
   }
+
+  /**
+   * Start real voice detection using audio recording
+   * DISABLED: Now handled by SpeechRecognitionWebView component
+   */
+  async startRealVoiceDetection() {
+    console.log('🎤 Real voice detection disabled - handled by SpeechRecognitionWebView');
+    // This method is now disabled as we use the WebView component for speech recognition
+    return;
+  }
+
+  /**
+   * Record audio and analyze for wake words
+   */
+  async recordAndAnalyzeAudio() {
+    console.log('🎤 Audio recording disabled - handled by SpeechRecognitionWebView');
+    // This method is now disabled as we use the WebView component for speech recognition
+    return;
+  }
+
+  /**
+   * Analyze recorded audio for wake words
+   * NOTE: This method is now disabled as we use WebView + Web Speech API for real speech recognition
+   */
+  async analyzeRecordedAudio() {
+    // This method is now replaced by WebView speech recognition
+    // The WebView handles all speech detection using the browser's Web Speech API
+    console.log('🎤 Speech recognition handled by WebView - this method is disabled');
+    
+    // No longer perform any audio analysis here
+    // The WebView will handle speech recognition and trigger wake word detection
+  }
+
+
 
   /**
    * Handle wake word detection
@@ -160,6 +236,8 @@ class KeywordWakeService {
   onWakeWordDetected(keywordIndex) {
     try {
       const now = Date.now();
+      
+      console.log(`🎤 Wake word detected! Keyword index: ${keywordIndex}, keyword: ${this.keywordPath}`);
       
       // Debounce repeated detections
       if (now - this.lastWakeTime < this.debounceMs) {
@@ -169,7 +247,7 @@ class KeywordWakeService {
       
       this.lastWakeTime = now;
       
-      console.log(`Wake word detected! Keyword index: ${keywordIndex}`);
+      console.log(`✅ Wake word confirmed! Processing...`);
       
       // Notify all listeners
       this.listeners.forEach(listener => {

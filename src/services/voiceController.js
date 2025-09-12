@@ -97,16 +97,9 @@ class VoiceController {
         throw new Error('Voice controller not initialized');
       }
 
+      // Allow wake word detection without voiceprint for emergency alerts
       if (!this.hasVoiceprint) {
-        Alert.alert(
-          'Voice Not Enrolled',
-          'You need to enroll your voice first to use "Mummy Help" voice alerts.',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Enroll Now', onPress: () => this.navigateToEnrollment() },
-          ]
-        );
-        return false;
+        console.log('Starting wake word detection without voiceprint for emergency alerts');
       }
 
       console.log('Starting voice listening...');
@@ -151,8 +144,12 @@ class VoiceController {
   async autoStart() {
     try {
       const wasEnabled = await AsyncStorage.getItem('voice_enabled');
-      if (wasEnabled === 'true' && this.hasVoiceprint) {
+      if (wasEnabled === 'true') {
         console.log('Auto-starting voice listening from previous session');
+        await this.start();
+      } else {
+        // Auto-start wake word detection for emergency alerts
+        console.log('Auto-starting wake word detection for emergency alerts');
         await this.start();
       }
     } catch (error) {
@@ -171,37 +168,16 @@ class VoiceController {
       }
 
       this.isProcessingWake = true;
-      console.log('Wake word detected, starting verification...', wakeData);
+      console.log('Wake word detected, showing emergency countdown...', wakeData);
 
       // Provide immediate feedback
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Notify listeners of wake detection
+      // Notify listeners of wake detection (this will trigger the emergency countdown modal)
       this.notifyListeners('wakeDetected', wakeData);
 
-      // Start speaker verification
-      const verificationResult = await svService.quickVerify({
-        timeout: VOICE_CONFIG.TIMING.QUICK_VERIFICATION_TIMEOUT,
-        deviceId: await this.getDeviceId(),
-        onProgress: (stage) => {
-          this.notifyListeners('verificationProgress', { stage });
-        },
-      });
-
-      console.log('Verification result:', verificationResult);
-
-      if (verificationResult.success && verificationResult.match) {
-        // Voice verified - show confirmation modal
-        await this.showConfirmationModal(verificationResult);
-      } else {
-        // Verification failed - log and ignore
-        console.log('Voice verification failed:', verificationResult.message);
-        
-        if (__DEV__) {
-          // In development, show feedback
-          this.notifyListeners('verificationFailed', verificationResult);
-        }
-      }
+      // Skip speaker verification for emergency alerts - go directly to countdown
+      console.log('Skipping speaker verification for emergency alert');
 
     } catch (error) {
       console.error('Error handling wake word:', error);
